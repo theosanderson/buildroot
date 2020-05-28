@@ -1464,7 +1464,6 @@ menu "JSON/XML"
 endmenu
 
 menu "Logging"
-	source "package/eventlog/Config.in"
 	source "package/glog/Config.in"
 	source "package/liblog4c-localtime/Config.in"
 	source "package/liblogging/Config.in"
