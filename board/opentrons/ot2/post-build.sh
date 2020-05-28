@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -u
 set -e
@@ -39,8 +39,6 @@ if [ ${OT_BUILD_TYPE} != "release" ]; then
     echo "Build type is NOT RELEASE, adding default ssh key and removing signing"
     # write common pubkey to authorized keys
     cat ${TARGET_DIR}/var/home/.ssh/robot_key.pub > ${TARGET_DIR}/var/home/.ssh/authorized_keys
-    # remove code signing cert (allows unsigned updates)
-    rm ${TARGET_DIR}/etc/opentrons-robot-signing-key.crt
     deployment_to_write="development"
 
 else
@@ -48,6 +46,11 @@ else
     deployment_to_write="production"
 fi
 
+if [ ! -e .signing-key ]; then
+    echo "No signing key present, removing cert"
+    # remove code signing cert (allows unsigned updates)
+    rm ${TARGET_DIR}/etc/opentrons-robot-signing-key.crt
+fi
 
 cat <<EOF >> "${TARGET_DIR}/etc/machine-info"
 PRETTY_HOSTNAME=${hostname_to_write}
@@ -60,14 +63,20 @@ if [[ -f ${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/avahi-daemon.s
     mv ${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/avahi-daemon.service ${TARGET_DIR}/etc/systemd/system/opentrons.target.wants/avahi-daemon.service
 fi
 
-python ./board/opentrons/ot2/write_version.py ${BINARIES_DIR}/opentrons-api-version.json ${BINARIES_DIR}/opentrons-update-server-version.json ${BINARIES_DIR}/VERSION.json
+python ./board/opentrons/ot2/write_version.py ${BINARIES_DIR}/opentrons-api-version.json ${BINARIES_DIR}/opentrons-update-server-version.json ${BINARIES_DIR}/opentrons-robot-server-version.json ${BINARIES_DIR}/VERSION.json
 cp ${BINARIES_DIR}/VERSION.json ${TARGET_DIR}/etc/VERSION.json
 
-# manually make a softlink for /etc/dropbear because it needs to be absolute
-# due to the logic in the dropbear system file, but if it was checked in it
-# would be rewritten by aws
+# Dropbear stores its host keys in /etc/dropbear, and the stock Buildroot
+# scripts make that a symlink to /var/run/dropbear.  Replace that with a link
+# to /var/lib/dropbear, on our RW partition, so the host keys persist across
+# reboots and upgrades.
+# 
+# See also: rootfs-overlay/etc/systemd/system/dropbear.service.d/create-host-key-directory.conf.
+# 
+# Also, create the link manually in this script, rather than putting it in the
+# rootfs overlay, so that AWS CodeBuild doesn't rewrite it to be relative.
 rm -f ${TARGET_DIR}/etc/dropbear
-ln -sf /var/run/dropbear ${TARGET_DIR}/etc/dropbear
+ln -s /var/lib/dropbear ${TARGET_DIR}/etc/dropbear
 
 
 # Syslog-ng extra setup:

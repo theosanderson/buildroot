@@ -28,8 +28,8 @@ trap finish EXIT
 
 DOCKER_BR_BIND_DIR="/buildroot"
 DOCKER_OT_BIND_DIR="/opentrons"
-DOCKER_BIND_BR="--mount type=bind,source=$(pwd),destination=${DOCKER_BR_BIND_DIR}"
-DOCKER_BIND_OT="--mount type=bind,source=$(pwd)/../opentrons,destination=${DOCKER_OT_BIND_DIR}"
+DOCKER_BIND_BR="--mount type=bind,source=$(pwd),destination=${DOCKER_BR_BIND_DIR},consistency=delegated"
+DOCKER_BIND_OT="--mount type=bind,source=$(pwd)/../opentrons,destination=${DOCKER_OT_BIND_DIR},consistency=delegated"
 DOCKER_BIND="${DOCKER_BIND_BR} ${DOCKER_BIND_OT}"
 heads=${@:1:$(($# - 1))}
 tail=${@:$#}
@@ -52,7 +52,9 @@ docker build ${filter_arg} -t ${imgname} .
 env | grep 'CODEBUILD\|AWS\|DATADOG' >.env
 echo "OT_BUILD_TYPE=${OT_BUILD_TYPE-dev}">>.env
 echo "FORCE_UNSAFE_CONFIGURE=1">>.env
-echo "${SIGNING_KEY}" > .signing-key
+if [ "${SIGNING_KEY}" ]; then
+    echo "${SIGNING_KEY}" > .signing-key
+fi
 
 case $# in
     0)
